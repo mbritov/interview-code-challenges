@@ -2,18 +2,6 @@ using Microsoft.AspNetCore.Mvc;
 using OneBeyondApi.DataAccess;
 using OneBeyondApi.Model;
 
-/*
-Add an "On Loan" end point with functionality to get/query the details of all borrowers with active loans and the titles of books they have on loan.
-Extend the "On Loan" end point to allow books on loan to be returned.
-
-If books are returned after their loan end date then a fine should be raised against the borrower 
-(data model for fines and relationships with borrowers are left to the candidate to define)
-
-Add functionality to allow a borrower to reserve a particular title that is currently on loan
-(also consider the case of multiple borrowers all wanting to borrow the same book). 
-The borrower should also be able to query via the API to find out when the book will be available for them.
-*/
-
 namespace OneBeyondApi.Controllers
 {
     [ApiController]
@@ -52,10 +40,10 @@ namespace OneBeyondApi.Controllers
 
         [HttpPost]
         [Route("RequestLoan")]
-        public IActionResult RequestLoan(Borrower borrower, Book book)
+        public IActionResult RequestLoan([FromBody]LoanRequest request)
         {
-            var res = _borrowerRepository.RequestLoan(borrower, book);
-            return Ok(res);
+            var res = _borrowerRepository.RequestLoan(request.Borrower, request.Book);
+            return Ok();
         }
 
         [HttpPost]
@@ -66,12 +54,11 @@ namespace OneBeyondApi.Controllers
             return Ok(res);
         }
 
-
         [HttpPost]
         [Route("Reserve")]
-        public IActionResult Reserve(Borrower borrower, Book book)
+        public IActionResult Reserve([FromBody] ReserveRequest request)
         {
-            var res = _borrowerRepository.Reserve(borrower, book);
+            var res = _borrowerRepository.Reserve(request.Borrower, request.Book);
             return Ok(res);
         }
     }
