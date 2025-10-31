@@ -80,6 +80,10 @@ namespace OneBeyondApi.DataAccess
                 if (bookInStock.LoanEndDate < DateTime.UtcNow)
                 {
                     // TODO apply penalty for overdue loan
+                    borrower.fines.Add(new Fine { Id = Guid.NewGuid(), 
+                        Date = DateTime.UtcNow, 
+                        Amount = 1.0F  // todo - make fine amount configurable
+                    });
                 }
 
                 bookInStock.OnLoanTo = null;
