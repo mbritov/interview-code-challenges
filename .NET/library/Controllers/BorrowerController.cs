@@ -40,7 +40,7 @@ namespace OneBeyondApi.Controllers
 
         [HttpPost]
         [Route("RequestLoan")]
-        public IActionResult RequestLoan([FromBody]LoanRequest request)
+        public IActionResult RequestLoan([FromBody] LoanRequest request)
         {
             var res = _borrowerRepository.RequestLoan(request.Borrower, request.Book);
             return Ok();

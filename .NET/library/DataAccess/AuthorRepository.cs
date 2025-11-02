@@ -4,27 +4,24 @@ namespace OneBeyondApi.DataAccess
 {
     public class AuthorRepository : IAuthorRepository
     {
-        public AuthorRepository()
+        private readonly LibraryContext _context;
+
+        public AuthorRepository(LibraryContext context)
         {
+            _context = context;
         }
+
         public List<Author> GetAuthors()
         {
-            using (var context = new LibraryContext())
-            {
-                var list = context.Authors
-                    .ToList();
-                return list;
-            }
+            var list = _context.Authors.ToList();
+            return list;
         }
 
         public Guid AddAuthor(Author author)
         {
-            using (var context = new LibraryContext())
-            {
-                context.Authors.Add(author);
-                context.SaveChanges();
-                return author.Id;
-            }
+            _context.Authors.Add(author);
+            _context.SaveChanges();
+            return author.Id;
         }
     }
 }

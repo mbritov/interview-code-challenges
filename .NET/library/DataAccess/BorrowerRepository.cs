@@ -1,18 +1,29 @@
 ﻿using OneBeyondApi.Model;
-using System.Net;
 
 namespace OneBeyondApi.DataAccess
 {
+    public enum OperationResult
+    {
+        Success,
+        BookNotFound,
+        BookAlreadyOnLoan,
+        BookNotAvailable,
+        BookAlreadyReserved,
+        BookAvailable
+    }
+
     public class BorrowerRepository : IBorrowerRepository
     {
-        public BorrowerRepository()
+        private readonly LibraryContext _context;
+
+        public BorrowerRepository(LibraryContext context)
         {
+            _context = context;
         }
 
         public List<Borrower> GetBorrowers()
         {
-            using var context = new LibraryContext();
-            var list = context.Borrowers
+            var list = _context.Borrowers
                 .ToList();
             return list;
         }
@@ -20,15 +31,13 @@ namespace OneBeyondApi.DataAccess
         // todo - add paging
         public List<BorrowerData> GetBorrowersWithLoan()
         {
-            using var context = new LibraryContext();
-
-            var borrowersWithLoans = context.Catalogue
+            var borrowersWithLoans = _context.Catalogue
                 .Where(c => c.OnLoanTo != null) // only loaned books
                 .GroupBy(c => c.OnLoanTo)
                 .Select(g => new BorrowerData
                 {
-                    borrower = g.Key!,
-                    booksOnLoan = g.Select(c => c.Book).ToList()
+                    Borrower = g.Key!,
+                    BooksOnLoan = g.Select(c => c.Book).ToList()
                 })
                 .ToList();
 
@@ -37,52 +46,50 @@ namespace OneBeyondApi.DataAccess
 
         public Guid AddBorrower(Borrower borrower)
         {
-            using var context = new LibraryContext();
-            context.Borrowers.Add(borrower);
-            context.SaveChanges();
+            _context.Borrowers.Add(borrower);
+            _context.SaveChanges();
             return borrower.Id;
         }
 
         public int RequestLoan(Borrower borrower, Book book)
         {
-            using var context = new LibraryContext();
-
-            // check if book is available in stock
-            var bookInStock = context.Catalogue.FirstOrDefault(p => p.Book.Id == book.Id);
+            var bookInStock = _context.Catalogue.FirstOrDefault(p => p.Book.Id == book.Id);
             if (bookInStock == null)
             {
-                // if not add new record to the stock
-                context.Catalogue.Add(
-                    new BookStock
-                    {
-                        Id = Guid.NewGuid(), OnLoanTo = borrower, Book = book, LoanEndDate = DateTime.UtcNow.AddDays(14) // make it configurable
-                    });
+                return (int)OperationResult.BookNotFound;
             }
-            else if (bookInStock.OnLoanTo == null)
+
+            if (bookInStock.OnLoanTo == null)
             {
                 bookInStock.OnLoanTo = borrower;
                 bookInStock.LoanEndDate = DateTime.UtcNow.AddDays(14); // make it configurable
             }
+            else
+            {
+                return (int)OperationResult.BookAlreadyOnLoan;
+            }
 
-            context.SaveChanges();
-            return 0;
+            _context.SaveChanges();
+
+            return (int)OperationResult.Success;
         }
 
         public int CompleteLoan(Borrower borrower, Guid bookId)
         {
-            using var context = new LibraryContext();
-
             // check if book is available
-            var bookInStock = context.Catalogue.FirstOrDefault(p => p.Book.Id == bookId);
+            var bookInStock = _context.Catalogue.FirstOrDefault(p => p.Book.Id == bookId);
             if (bookInStock != null)
             {
                 // check if the book is returned after allowed date
                 if (bookInStock.LoanEndDate < DateTime.UtcNow)
                 {
-                    // TODO apply penalty for overdue loan
-                    borrower.fines.Add(new Fine { Id = Guid.NewGuid(), 
-                        Date = DateTime.UtcNow, 
-                        Amount = 1.0F  // todo - make fine amount configurable
+                    var daysOverdue = (DateTime.UtcNow - bookInStock.LoanEndDate.Value).Days;
+                    var fineAmount = daysOverdue * 1.0m; // todo - make fine amount configurable
+
+                    _context.Fines.Add(new Fine { 
+                        Amount = fineAmount,
+                        BorrowerId = borrower.Id,
+                        Reason = $"Book was returned {daysOverdue} days later"
                     });
                 }
 
@@ -90,34 +97,40 @@ namespace OneBeyondApi.DataAccess
                 bookInStock.LoanEndDate = null;
             }
 
-            context.SaveChanges();
-            return 0;
+            _context.SaveChanges();
+
+            return (int)OperationResult.Success;
         }
 
         public int Reserve(Borrower borrower, Book book)
         {
-            using var context = new LibraryContext();
-            var bookInStock = context.Catalogue.FirstOrDefault(p => p.Book.Id == book.Id && p.OnLoanTo != null);
-            if (bookInStock != null)
+            var bookInStock = _context.Catalogue.FirstOrDefault(p => p.Book.Id == book.Id);
+            if (bookInStock == null)
             {
-                // reserve
-                bookInStock.ReserverdTo = borrower;
-                // todo - add mutliple reservedTo borrowers
+                return (int)OperationResult.BookNotFound;
             }
-            else
-            {
-                // if not add new record to the stock
-                context.Catalogue.Add(
-                    new BookStock
-                    {
-                        Id = Guid.NewGuid(),
-                        Book = book,
-                        ReserverdTo = borrower
-                    });
-            }
-            context.SaveChanges();
 
-            return 0;
+            if (bookInStock.OnLoanTo == null)
+            {
+                return (int)OperationResult.BookAvailable;
+            }
+
+            bool isReserved = _context.Reservations
+                .Any(r => r.BorrowerId == borrower.Id && r.BookId == book.Id);
+
+            if (isReserved)
+                return (int)OperationResult.BookAlreadyReserved;
+
+            _context.Reservations.Add(new Reservation
+            {
+                BorrowerId = borrower.Id,
+                BookId = book.Id,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            _context.SaveChanges();
+
+            return (int)OperationResult.Success;
         }
     }
 }

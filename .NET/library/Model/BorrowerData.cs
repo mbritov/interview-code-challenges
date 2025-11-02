@@ -1,7 +1,8 @@
-using OneBeyondApi.Model;
-
-public class BorrowerData
+namespace OneBeyondApi.Model
 {
-    public Borrower borrower { get; set; }
-    public List<Book> booksOnLoan { get; set; }
+    public class BorrowerData
+    {
+        public Borrower Borrower { get; set; }
+        public List<Book> BooksOnLoan { get; set; }
+    }
 }

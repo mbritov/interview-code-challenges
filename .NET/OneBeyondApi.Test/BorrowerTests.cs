@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using OneBeyondApi.DataAccess;
 using OneBeyondApi.Model;
 
@@ -7,25 +7,36 @@ namespace OneBeyondApi.Tests.DataAccess
     [TestFixture]
     public class BorrowerRepositoryTests
     {
-        private readonly BorrowerRepository repository = new BorrowerRepository();
-        private readonly CatalogueRepository catRepository = new CatalogueRepository();
+        private readonly BorrowerRepository borrowerRepository;
+        private readonly CatalogueRepository catRepository;
+        private readonly LibraryContext context;
 
-        public LibraryContext GetInMemoryContext()
+        public BorrowerRepositoryTests()
         {
-            var context = new LibraryContext();            
-            return context;
+            var options = new DbContextOptionsBuilder<LibraryContext>()
+                .UseInMemoryDatabase("TestDb")
+                .Options;
+
+            context = new LibraryContext(options);
+            borrowerRepository = new BorrowerRepository(context);
+            catRepository = new CatalogueRepository(context);
         }
+
+        [OneTimeTearDown]
+        public void TearDown()
+        {
+            context.Dispose();
+        }
+
 
         [Test]
         public void AddBorrower_ShouldAddAndReturnId()
         {
             // Arrange
-            using var context = GetInMemoryContext();
-            var repo = new BorrowerRepository();
             var borrower = new Borrower { Id = Guid.NewGuid(), Name = "John Doe", EmailAddress = "test@test.com" };
 
             // Act
-            repository.AddBorrower(borrower);
+            borrowerRepository.AddBorrower(borrower);
             var borrowers = context.Borrowers.ToList();
 
             // Assert
@@ -37,7 +48,6 @@ namespace OneBeyondApi.Tests.DataAccess
         public void GetBorrowers_ShouldReturnAllBorrowers()
         {
             // Arrange
-            using var context = GetInMemoryContext();
             context.Borrowers.AddRange(
                 new Borrower { Id = Guid.NewGuid(), Name = "Alice", EmailAddress = "test1@test.com" },
                 new Borrower { Id = Guid.NewGuid(), Name = "Bob", EmailAddress = "test2@test.com" }
@@ -45,7 +55,7 @@ namespace OneBeyondApi.Tests.DataAccess
             context.SaveChanges();
 
             // Act
-            var borrowers = repository.GetBorrowers();
+            var borrowers = borrowerRepository.GetBorrowers();
 
             //Assert
             Assert.That(borrowers.Count, Is.GreaterThan(1));
@@ -55,8 +65,6 @@ namespace OneBeyondApi.Tests.DataAccess
         public void GetBorrowersWithLoan_ShouldReturnBorrowersHavingBooksInBookStock()
         {
             // Arrange
-            using var context = GetInMemoryContext();
-
             var borrower1 = new Borrower { Id = Guid.NewGuid(), Name = "Reader 1", EmailAddress = "test1@test.com" };
             var borrower2 = new Borrower { Id = Guid.NewGuid(), Name = "Reader 2", EmailAddress = "test2@test.com" };
 
@@ -71,64 +79,88 @@ namespace OneBeyondApi.Tests.DataAccess
             context.SaveChanges();
 
             // Act
-            var borrowersWithLoans = repository.GetBorrowersWithLoan();
+            var borrowersWithLoans = borrowerRepository.GetBorrowersWithLoan();
 
             // Assert
             Assert.That(borrowersWithLoans.Count, Is.EqualTo(1));
-            Assert.That(borrowersWithLoans.First().borrower.Name, Is.EqualTo("Reader 1"));
+            Assert.That(borrowersWithLoans.First().Borrower.Name, Is.EqualTo("Reader 1"));
         }
 
         [Test]
         public void RequestLoan_ShouldAssignBorrowerAndSetLoanEndDate()
         {
             // Arrange
-            using var context = GetInMemoryContext();
-
             var borrower = new Borrower { Id = Guid.NewGuid(), Name = "Borrower", EmailAddress = "test1@test.com" };
             var book = new Book { Id = Guid.NewGuid(), Name = "Book X", ISBN = "123" };
+            var bookOnLoan = new BookStock
+            {
+                Book = book,
+                OnLoanTo = null,
+                LoanEndDate = null
+            };
+            context.Borrowers.Add(borrower);
+            context.Books.Add(book);
+            context.Catalogue.Add(bookOnLoan);
+            context.SaveChanges();
 
             // Act
-            repository.RequestLoan(borrower, book);
+            borrowerRepository.RequestLoan(borrower, book);
 
-            var borrowerData = repository.GetBorrowersWithLoan().First(p => p.borrower.Id == borrower.Id);
+            var borrowerData = borrowerRepository.GetBorrowersWithLoan().First(p => p.Borrower.Id == borrower.Id);
 
-            Assert.That(borrowerData.borrower.Id, Is.EqualTo(borrower.Id));
-            Assert.That(borrowerData.booksOnLoan.Any(), Is.True);
+            // Assert
+            Assert.That(borrowerData.Borrower.Id, Is.EqualTo(borrower.Id));
+            Assert.That(borrowerData.BooksOnLoan.Any(), Is.True);
         }
 
         [Test]
         public void CompleteLoan_ShouldClearLoanData()
         {
             // Assert
-            using var context = GetInMemoryContext();
-
             var borrower = new Borrower { Id = Guid.NewGuid(), Name = "Borrower", EmailAddress = "test1@test.com" };
             var book = new Book { Id = Guid.NewGuid(), Name = "Book X", ISBN = "123" };
+            var bookOnLoan = new BookStock
+            {
+                Book = book,
+                OnLoanTo = borrower,
+                LoanEndDate = DateTime.Now.Date.AddDays(7)
+            };
+            context.Borrowers.Add(borrower);
+            context.Books.Add(book);
+            context.Catalogue.Add(bookOnLoan);
+            context.SaveChanges();
 
             // Act
-            repository.RequestLoan(borrower, book);
-            repository.CompleteLoan(borrower, book.Id);
-            var borrowerData = repository.GetBorrowersWithLoan().First(p => p.borrower.Id == borrower.Id);
+            borrowerRepository.CompleteLoan(borrower, book.Id);
+            var borrowerData = borrowerRepository.GetBorrowersWithLoan().FirstOrDefault(p => p.Borrower.Id == borrower.Id);
 
             // Assert
-            Assert.That(borrowerData.booksOnLoan.Any(b => b.Id == book.Id),Is.True);
+            Assert.That(borrowerData, Is.Null);
         }
 
         [Test]
         public void ReserveBook_ShouldAddReserveToBorrower()
         {
             // Assert
-            using var context = GetInMemoryContext();
-
             var borrower = new Borrower { Id = Guid.NewGuid(), Name = "Borrower", EmailAddress = "test1@test.com" };
             var book = new Book { Id = Guid.NewGuid(), Name = "Book X", ISBN = "123" };
+            var bookOnLoan = new BookStock
+            {
+                Book = book,
+                OnLoanTo = borrower,
+                LoanEndDate = DateTime.Now.Date.AddDays(7)
+            };
+            context.Borrowers.Add(borrower);
+            context.Books.Add(book);
+            context.Catalogue.Add(bookOnLoan);
+            context.SaveChanges();
 
             // Act
-            repository.Reserve(borrower, book);
-            var books = catRepository.SearchCatalogue(new CatalogueSearch() { BookName = book.Name });
+            borrowerRepository.Reserve(borrower, book);
+            var books = catRepository.SearchReservations( book.Id, borrower.Id);
 
             // Assert
-            Assert.That(books.Any(b => b.ReserverdTo.Id == borrower.Id), Is.True);
+            Assert.That(books.Any(b => b.BorrowerId == borrower.Id), Is.True);
         }
     }
 }

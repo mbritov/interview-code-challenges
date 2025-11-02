@@ -1,6 +1,12 @@
-public class Fine
+namespace OneBeyondApi.Model
 {
-    public Guid Id { get; set; }
-    public DateTime Date {  get; set; }
-    public float Amount { get; set; }
+    public class Fine
+    {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid BorrowerId { get; set; }
+        public decimal Amount { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public DateTime Date { get; set; } = DateTime.UtcNow;
+        public bool IsPaid { get; set; } = false;
+    }
 }

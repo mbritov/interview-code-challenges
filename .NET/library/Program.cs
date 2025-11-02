@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using OneBeyondApi;
 using OneBeyondApi.DataAccess;
 
@@ -9,8 +10,8 @@ builder.Services.AddScoped<IBookRepository, BookRepository>();
 builder.Services.AddScoped<IBorrowerRepository, BorrowerRepository>();
 builder.Services.AddScoped<ICatalogueRepository, CatalogueRepository>();
 
-// Seed test data into memory DB
-SeedData.SetInitialData();
+builder.Services.AddDbContext<LibraryContext>(options =>
+    options.UseInMemoryDatabase(databaseName: "AuthorDb"));
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -19,10 +20,17 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// Seed test data into memory DB
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<LibraryContext>();
+    SeedData.SetInitialData(context);
+}
+
 // Configure the HTTP request pipeline.
 //if (app.Environment.IsDevelopment())
 //{
-    app.UseSwagger();
+app.UseSwagger();
     app.UseSwaggerUI();
 //}
 

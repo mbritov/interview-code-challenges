@@ -1,6 +1,8 @@
-using OneBeyondApi.Model;
-public class ReserveRequest
+namespace OneBeyondApi.Model
 {
-    public Borrower Borrower { get; set; }
-    public Book Book { get; set; }
+    public class ReserveRequest
+    {
+        public Borrower Borrower { get; set; }
+        public Book Book { get; set; }
+    }
 }

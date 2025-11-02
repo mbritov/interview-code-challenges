@@ -5,13 +5,17 @@ namespace OneBeyondApi.DataAccess
 {
     public class LibraryContext: DbContext
     {
-        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        public LibraryContext(DbContextOptions<LibraryContext> options)
+            : base(options)
         {
-            optionsBuilder.UseInMemoryDatabase(databaseName: "AuthorDb");
         }
+
         public DbSet<Author> Authors { get; set; }
         public DbSet<Book> Books { get; set; }
         public DbSet<BookStock> Catalogue { get; set; }
         public DbSet<Borrower> Borrowers { get; set; }
+        public DbSet<Fine> Fines { get; set; }
+
+        public DbSet<Reservation> Reservations { get; set; }
     }
 }
